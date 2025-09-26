@@ -30,6 +30,46 @@ The system consists of several key components:
 - Docker and Docker Compose
 - OpenAI API key
 
+### Install Docker on Raspberry Pi OS
+
+If you are starting from a clean Raspberry Pi OS installation, follow these steps to install Docker and Docker Compose:
+
+1. **Update the operating system**
+   ```bash
+   sudo apt update
+   sudo apt full-upgrade -y
+   sudo reboot
+   ```
+   Rebooting ensures the kernel and firmware updates are applied before installing Docker.
+
+2. **Install Docker using the official convenience script**
+   ```bash
+   curl -fsSL https://get.docker.com | sh
+   ```
+   The script detects the Raspberry Pi architecture and installs the latest supported Docker Engine packages.
+
+3. **Enable non-root Docker usage (optional but recommended)**
+   ```bash
+   sudo usermod -aG docker $USER
+   newgrp docker
+   ```
+   Adding your user to the `docker` group lets you run Docker commands without `sudo`.
+
+4. **Install Docker Compose plugin**
+   ```bash
+   sudo apt install -y docker-compose-plugin
+   ```
+   The plugin provides the `docker compose` command (`docker-compose` remains available through compatibility symlinks).
+
+5. **Verify the installation**
+   ```bash
+   docker --version
+   docker compose version
+   ```
+   Both commands should print version information without errors.
+
+With Docker available, you can continue with the project-specific steps below.
+
 ### Installation
 
 1. **Clone the repository**:
