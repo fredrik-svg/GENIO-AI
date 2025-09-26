@@ -91,6 +91,10 @@ With Docker available, you can continue with the project-specific steps below.
    > command above may print `-bash: docker-compose: command not found`. Install the
    > Docker Compose plugin as shown in the prerequisites section or run
    > `docker-compose up --build` instead.
+   >
+   > If Docker reports `permission denied` when connecting to `/var/run/docker.sock`,
+   > run the command with `sudo` or add your user to the `docker` group and log out
+   > and back in (`sudo usermod -aG docker $USER`).
 
 4. **Access the web interface**:
    Open your browser to `http://localhost:8080` (or your Raspberry Pi's IP address)
