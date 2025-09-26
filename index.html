@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Raspberry Pi Voice Assistant — Web UI</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Roboto, "Helvetica Neue", Arial; margin: 1rem; max-width: 900px; }
+    h1 { font-size: 1.4rem; }
+    #chat { border: 1px solid #ddd; padding: 1rem; height: 60vh; overflow-y: auto; background: #fafafa; }
+    .msg { margin: 0.25rem 0; padding: 0.5rem; border-radius: 8px; }
+    .msg.user { background: #e6f7ff; text-align: left; }
+    .msg.assistant { background: #fff; border: 1px solid #eee; text-align: left; }
+    #controls { display:flex; gap: 0.5rem; margin-top: 0.75rem; }
+    #recordBtn.recording { background: #c83349; color: white; }
+    #footer { margin-top: 1rem; color: #666; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>Raspberry Pi Voice Assistant — Web UI (Svenska)</h1>
+
+  <div id="chat" aria-live="polite"></div>
+
+  <div id="controls">
+    <input id="textInput" type="text" placeholder="Skriv meddelande..." style="flex:1" />
+    <button id="sendBtn">Skicka</button>
+    <button id="speakBtn">Säg (TTS)</button>
+    <button id="recordBtn">Spela in</button>
+  </div>
+
+  <div id="footer">
+    - Klicka "Spela in" för att spela in tal (webbläsaren kommer fråga efter mikrofon).<br/>
+    - Inspelningar skickas till servern för transkription via OpenAI Whisper.<br/>
+    - "Säg (TTS)" genererar server-side TTS (espeak-ng) och spelar upp svaret i webbläsaren.
+  </div>
+
+  <script src="/static/main.js"></script>
+</body>
+</html>

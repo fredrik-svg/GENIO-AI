@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+jinja2
+aiofiles
+python-multipart
+openai>=0.27.0
+numpy
+faiss-cpu
+sounddevice
+pydub
+webrtcvad
+pvporcupine==1.9.1
+PyYAML
+coloredlogs
