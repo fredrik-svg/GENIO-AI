@@ -93,8 +93,11 @@ With Docker available, you can continue with the project-specific steps below.
    > `docker-compose up --build` instead.
    >
    > If Docker reports `permission denied` when connecting to `/var/run/docker.sock`,
-   > run the command with `sudo` or add your user to the `docker` group and log out
-   > and back in (`sudo usermod -aG docker $USER`).
+   > it means your current user is not allowed to talk to the Docker daemon. Run the
+   > command with `sudo` or add your user to the `docker` group and log out and back
+   > in (`sudo usermod -aG docker $USER && newgrp docker`). On systems that use
+   > `systemd`, you may also need to ensure the Docker service is running with
+   > `sudo systemctl start docker`.
 
 4. **Access the web interface**:
    Open your browser to `http://localhost:8080` (or your Raspberry Pi's IP address)
@@ -237,6 +240,10 @@ docker run --rm -p 8080:8080 \
 2. **Audio Recording**: Check browser permissions for microphone access
 3. **TTS Not Working**: Verify espeak-ng is installed (`espeak-ng --version`)
 4. **Port Already in Use**: Change the port in docker-compose.yml or kill existing processes
+5. **Docker Socket Permission Denied**: If you see `permission denied` errors when
+   Docker tries to access `/var/run/docker.sock`, run the command with `sudo` or
+   add your user to the Docker group (`sudo usermod -aG docker $USER && newgrp docker`).
+   Make sure the Docker daemon itself is running (`sudo systemctl status docker`).
 
 ### Logs
 
