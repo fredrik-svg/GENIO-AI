@@ -1,6 +1,7 @@
 # Dockerfile optimized for Raspberry Pi 5 (64-bit / arm64)
 # Build on an image that supports multi-arch; the official python slim images are multi-arch.
-FROM --platform=linux/arm64 python:3.11-slim
+# The --platform flag is removed to allow flexible building on different architectures
+FROM python:3.11-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
