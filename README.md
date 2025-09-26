@@ -85,8 +85,12 @@ With Docker available, you can continue with the project-specific steps below.
 
 3. **Run with Docker Compose**:
    ```bash
-   docker-compose up --build
+   docker compose up --build
    ```
+   > **Note:** If your system only provides the legacy `docker-compose` binary, the
+   > command above may print `-bash: docker-compose: command not found`. Install the
+   > Docker Compose plugin as shown in the prerequisites section or run
+   > `docker-compose up --build` instead.
 
 4. **Access the web interface**:
    Open your browser to `http://localhost:8080` (or your Raspberry Pi's IP address)
