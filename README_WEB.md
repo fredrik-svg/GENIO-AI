@@ -34,3 +34,11 @@ Notes & recommendations
   - Running RAG ingestion ahead of time (python rag.py --ingest docs/).
 - If you want full offline STT, swap /api/transcribe to call a local whisper.cpp binary instead of OpenAI Whisper.
 - If you plan to expose the UI to the internet, secure the service (reverse proxy, HTTPS, auth).
+
+Troubleshooting
+---------------
+
+- **Permission denied when pulling/building images**: If Docker prints `permission denied`
+  for `/var/run/docker.sock`, run the command with `sudo` or add your user to the
+  `docker` group and start a new shell (`sudo usermod -aG docker $USER && newgrp docker`).
+  Also confirm the Docker daemon is running (`sudo systemctl status docker`).
