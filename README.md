@@ -159,6 +159,12 @@ The FastAPI server exposes several REST endpoints:
 - `POST /api/transcribe` - Upload audio file, get transcription
 - `POST /api/synthesize` - Convert text to speech, get WAV file
 - `GET /api/health` - Health check endpoint
+- `GET /install` - Webbaserad installationsguide för n8n-integrationen
+- `GET /api/n8n/config` - Hämta nuvarande n8n-inställningar
+- `POST /api/n8n/test-base` - Testa anslutning mot n8n-basen (kontrollerar `/healthz`)
+- `POST /api/n8n/test-webhook` - Skicka testpayload till webhooken
+- `POST /api/n8n/test-api-key` - Verifiera API-nyckel mot `rest/workflows`
+- `POST /api/n8n/save` - Spara konfigurationen till `n8n_config.yaml`
 
 ### Example API Usage
 
@@ -184,14 +190,33 @@ curl -X POST "http://localhost:8080/api/synthesize" \
 ├── webapp.py              # FastAPI web server
 ├── rag.py                 # RAG implementation (referenced)
 ├── stt_openai.py          # Speech-to-text module (referenced)
+├── n8n_config.py          # Hjälpmodul som sparar/laddar n8n-inställningar
 ├── index.html             # Web interface template
 ├── main.js                # Frontend JavaScript
+├── templates/setup.html   # Webbaserad installationsguide för n8n
 ├── requirements-web.txt   # Python dependencies
 ├── Dockerfile             # Container definition
 ├── docker-compose.yml     # Docker Compose configuration
 ├── README.md              # This file
 └── README_WEB.md          # Web-specific documentation
 ```
+
+### Integrering med n8n
+
+För att koppla GENIO-AI till ett n8n-flöde används HTTP-anrop direkt från Raspberry Pi:n där appen körs. Flödet tar emot data via en webhook och kan valfritt säkras med n8n:s inbyggda API-nyckel. Kommunikationen sker på följande sätt:
+
+1. **Webhook** – När en användare skriver ett meddelande i chatten, och assistenten svarar, skickar appen ett JSON-objekt med både användarens fråga och assistentens svar till den konfigurerade webhook-sökvägen (`event="chat"`).
+2. **Test av anslutning** – Appen kan automatiskt kontrollera att n8n är uppe genom att fråga efter `<bas-url>/healthz`.
+3. **API-nyckel** – Om du anger en API-nyckel läggs den i headern `X-N8N-API-KEY` vid anrop till `rest/workflows`, vilket gör att du kan verifiera att nyckeln fungerar och att flödet är tillgängligt.
+
+För att förenkla uppsättningen finns en installationsguide i webgränssnittet på `http://<din-pi>:8080/install`. Guiden gör fyra saker:
+
+1. Ber användaren mata in bas-URL (exempelvis `http://192.168.1.50:5678`) och testar anslutningen genom att kalla `/healthz`.
+2. Ber om webhook-sökvägen (exempelvis `/webhook/genio-ai`) och skickar ett testpayload för att säkerställa att flödet tar emot data.
+3. Valfritt: kontrollerar en API-nyckel mot `rest/workflows` för att försäkra sig om att REST-gränssnittet fungerar.
+4. Sparar konfigurationen i `n8n_config.yaml` och aktiverar integrationen direkt. Efter sparning kommer alla kommande chatt-svar att notifiera flödet via webhooken.
+
+Om något test misslyckas visar guiden tydliga felmeddelanden så att du kan justera inställningarna eller felsöka n8n-instansen. När allt är grönt visas statusen “Aktiv integration”.
 
 ### Adding Documents for RAG
 

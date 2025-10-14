@@ -5,6 +5,7 @@ aiofiles
 python-multipart
 openai>=0.27.0
 numpy
+httpx
 faiss-cpu
 sounddevice
 pydub

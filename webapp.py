@@ -10,14 +10,17 @@ Features:
 
 Place this file at the project root next to config.yaml and other modules.
 """
+import asyncio
 import os
 import tempfile
 import subprocess
 import logging
 from typing import Optional
+from urllib.parse import urljoin
 
 import yaml
 import openai
+import httpx
 from fastapi import FastAPI, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -26,6 +29,7 @@ from fastapi.templating import Jinja2Templates
 # Reuse existing repo modules
 from rag import Retriever  # reuse existing Retriever
 from stt_openai import transcribe_file  # reuse existing STT helper
+from n8n_config import load_n8n_config, save_n8n_config
 
 LOG = logging.getLogger("webui")
 logging.basicConfig(level=logging.INFO)
@@ -60,6 +64,44 @@ if not openai.api_key:
 # Initialize retriever for RAG queries
 retriever = Retriever(cfg)
 
+N8N_TIMEOUT = 6.0
+n8n_config = load_n8n_config()
+
+
+def _normalize_base_url(base_url: str) -> str:
+    base_url = (base_url or "").strip()
+    if not base_url:
+        raise ValueError("Bas-URL saknas")
+    if not base_url.startswith("http://") and not base_url.startswith("https://"):
+        base_url = "http://" + base_url
+    return base_url.rstrip("/")
+
+
+def _n8n_enabled() -> bool:
+    return bool(n8n_config.get("base_url") and n8n_config.get("webhook_path"))
+
+
+async def _post_to_n8n(event: str, payload: dict) -> None:
+    if not _n8n_enabled():
+        return
+
+    base_url = _normalize_base_url(n8n_config["base_url"])
+    webhook_path = (n8n_config["webhook_path"] or "").lstrip("/")
+    webhook_url = urljoin(base_url + "/", webhook_path)
+
+    headers = {"Content-Type": "application/json"}
+    if n8n_config.get("api_key"):
+        headers["X-N8N-API-KEY"] = n8n_config["api_key"].strip()
+
+    data = {"event": event, "payload": payload}
+    try:
+        async with httpx.AsyncClient(timeout=N8N_TIMEOUT) as client:
+            resp = await client.post(webhook_url, json=data, headers=headers)
+            resp.raise_for_status()
+        LOG.info("n8n notifierade via %s", webhook_url)
+    except Exception:
+        LOG.exception("Kunde inte skicka händelse till n8n")
+
 SYSTEM_PROMPT = (
     "Du är en hjälpsam assistent som svarar på svenska. "
     "Använd korta, tydliga svar och referera till dokument om de är relevanta."
@@ -69,6 +111,14 @@ SYSTEM_PROMPT = (
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/install", response_class=HTMLResponse)
+async def install(request: Request):
+    return templates.TemplateResponse(
+        "setup.html",
+        {"request": request, "n8n_config": n8n_config, "n8n_enabled": _n8n_enabled()},
+    )
 
 
 @app.post("/api/chat")
@@ -97,6 +147,12 @@ async def api_chat(message: str = Form(...)):
             temperature=0.2,
         )
         content = resp["choices"][0]["message"]["content"]
+        if _n8n_enabled():
+            asyncio.create_task(
+                _post_to_n8n(
+                    "chat", {"message": message, "assistant_reply": content}
+                )
+            )
         return {"reply": content}
     except Exception as e:
         LOG.exception("Chat failed")
@@ -164,6 +220,129 @@ async def api_synthesize(text: str = Form(...), rate: Optional[int] = Form(None)
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/api/n8n/config")
+async def get_n8n_config():
+    return {"config": n8n_config, "enabled": _n8n_enabled()}
+
+
+@app.post("/api/n8n/test-base")
+async def test_n8n_base(base_url: str = Form(...)):
+    try:
+        normalized = _normalize_base_url(base_url)
+    except ValueError as exc:
+        return JSONResponse({"success": False, "detail": str(exc)}, status_code=400)
+
+    health_url = urljoin(normalized + "/", "healthz")
+    try:
+        async with httpx.AsyncClient(timeout=N8N_TIMEOUT) as client:
+            resp = await client.get(health_url)
+        if resp.status_code == 200:
+            return {"success": True, "detail": f"Anslutning OK mot {health_url}"}
+        return JSONResponse(
+            {
+                "success": False,
+                "detail": f"Fick status {resp.status_code} från {health_url}",
+            },
+            status_code=502,
+        )
+    except httpx.RequestError as exc:
+        return JSONResponse(
+            {
+                "success": False,
+                "detail": f"Kunde inte nå {health_url}: {exc}",
+            },
+            status_code=502,
+        )
+
+
+@app.post("/api/n8n/test-webhook")
+async def test_n8n_webhook(base_url: str = Form(...), webhook_path: str = Form(...)):
+    try:
+        normalized = _normalize_base_url(base_url)
+    except ValueError as exc:
+        return JSONResponse({"success": False, "detail": str(exc)}, status_code=400)
+
+    path = (webhook_path or "").lstrip("/")
+    if not path:
+        return JSONResponse({"success": False, "detail": "Webhook-sökväg saknas"}, status_code=400)
+
+    webhook_url = urljoin(normalized + "/", path)
+    headers = {"Content-Type": "application/json"}
+    try:
+        async with httpx.AsyncClient(timeout=N8N_TIMEOUT) as client:
+            resp = await client.post(webhook_url, json={"event": "test", "ping": "genio-ai"})
+        if resp.status_code in {200, 201, 202, 204}:
+            return {"success": True, "detail": f"Webhook svarade med {resp.status_code}"}
+        return JSONResponse(
+            {
+                "success": False,
+                "detail": f"Webhook svarade med status {resp.status_code}",
+            },
+            status_code=502,
+        )
+    except httpx.RequestError as exc:
+        return JSONResponse(
+            {
+                "success": False,
+                "detail": f"Kunde inte nå webhook {webhook_url}: {exc}",
+            },
+            status_code=502,
+        )
+
+
+@app.post("/api/n8n/test-api-key")
+async def test_n8n_api_key(base_url: str = Form(...), api_key: str = Form("")):
+    try:
+        normalized = _normalize_base_url(base_url)
+    except ValueError as exc:
+        return JSONResponse({"success": False, "detail": str(exc)}, status_code=400)
+
+    if not api_key.strip():
+        return JSONResponse({"success": False, "detail": "API-nyckel saknas"}, status_code=400)
+
+    rest_url = urljoin(normalized + "/", "rest/workflows")
+    headers = {"X-N8N-API-KEY": api_key.strip()}
+    try:
+        async with httpx.AsyncClient(timeout=N8N_TIMEOUT) as client:
+            resp = await client.get(rest_url, headers=headers)
+        if resp.status_code == 200:
+            return {"success": True, "detail": "API-nyckeln fungerar"}
+        return JSONResponse(
+            {
+                "success": False,
+                "detail": f"Status {resp.status_code} från {rest_url}",
+            },
+            status_code=502,
+        )
+    except httpx.RequestError as exc:
+        return JSONResponse(
+            {
+                "success": False,
+                "detail": f"Kunde inte kontakta {rest_url}: {exc}",
+            },
+            status_code=502,
+        )
+
+
+@app.post("/api/n8n/save")
+async def save_n8n_settings(
+    base_url: str = Form(""), webhook_path: str = Form(""), api_key: str = Form("")
+):
+    try:
+        normalized = _normalize_base_url(base_url)
+    except ValueError as exc:
+        return JSONResponse({"success": False, "detail": str(exc)}, status_code=400)
+
+    config = {
+        "base_url": normalized,
+        "webhook_path": (webhook_path or "").strip(),
+        "api_key": (api_key or "").strip(),
+    }
+    save_n8n_config(config)
+    n8n_config.update(config)
+    return {"success": True, "detail": "Konfiguration sparad", "enabled": _n8n_enabled()}
 
 
 if __name__ == "__main__":
