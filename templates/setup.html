@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>n8n-installation för GENIO-AI</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Roboto, "Helvetica Neue", Arial; margin: 1.5rem; max-width: 960px; }
+    h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+    section { border: 1px solid #ddd; border-radius: 12px; padding: 1rem 1.5rem; margin-bottom: 1.5rem; background: #fafafa; }
+    section h2 { font-size: 1.2rem; margin-top: 0; }
+    label { display: block; font-weight: 600; margin-top: 0.75rem; }
+    input { width: 100%; padding: 0.5rem; font-size: 1rem; margin-top: 0.25rem; }
+    button { margin-top: 0.75rem; padding: 0.6rem 1.2rem; font-size: 1rem; border-radius: 999px; border: none; background: #2563eb; color: white; cursor: pointer; }
+    button.secondary { background: #6b7280; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    .status { margin-top: 0.5rem; font-size: 0.95rem; }
+    .status.ok { color: #047857; }
+    .status.error { color: #b91c1c; }
+    ol.steps { padding-left: 1.5rem; }
+    ol.steps li { margin-bottom: 0.5rem; }
+    .badge { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; padding: 0.25rem 0.6rem; border-radius: 999px; background: #e0f2fe; color: #1d4ed8; }
+    nav { margin-bottom: 1.5rem; }
+    nav a { color: #2563eb; text-decoration: none; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <nav><a href="/">← Tillbaka till assistenten</a></nav>
+  <h1>Installationsguide för n8n-flöde</h1>
+  <p>Den här guiden hjälper dig att ansluta GENIO-AI till ett n8n-flöde via REST/webhook. Varje steg kontrolleras direkt från Raspberry Pi så att du kan verifiera att integrationen fungerar innan den används i produktion.</p>
+
+  <section>
+    <h2>Översikt över kommunikationen</h2>
+    <p>Appen skickar händelser till n8n via en <strong>webhook</strong>. När chatten används skickas både användarens meddelande och assistentens svar till webhooken. Om du anger en API-nyckel kan appen även göra autentiserade statuskontroller mot n8n:s REST-API.</p>
+    <ol class="steps">
+      <li><strong>Bas-URL</strong> (t.ex. <code>http://192.168.1.50:5678</code>) används för alla tester.</li>
+      <li><strong>Webhook-sökväg</strong> (t.ex. <code>/webhook/genio-ai</code>) tar emot händelser från assistenten.</li>
+      <li><strong>API-nyckel</strong> (valfri men rekommenderad) möjliggör kontrollfrågor mot <code>/rest/workflows</code>.</li>
+      <li>När samtliga steg är godkända sparas konfigurationen i <code>n8n_config.yaml</code> och aktiveras direkt.</li>
+    </ol>
+  </section>
+
+  <section id="step1">
+    <h2>Steg 1 – Testa anslutning till n8n</h2>
+    <p>Ange bas-URL till din n8n-instans. Guiden försöker sedan nå <code>/healthz</code>.</p>
+    <label for="baseUrl">Bas-URL</label>
+    <input id="baseUrl" type="text" placeholder="http://192.168.1.50:5678" value="{{ n8n_config['base_url'] }}" />
+    <button id="testBaseBtn">Testa anslutning</button>
+    <div class="status" id="step1Status"></div>
+  </section>
+
+  <section id="step2">
+    <h2>Steg 2 – Testa webhook</h2>
+    <p>När bas-URL fungerar kan du ange webhook-sökvägen som flödet lyssnar på. Ett testpayload skickas för att bekräfta att n8n tar emot anropet.</p>
+    <label for="webhookPath">Webhook-sökväg</label>
+    <input id="webhookPath" type="text" placeholder="/webhook/genio-ai" value="{{ n8n_config['webhook_path'] }}" />
+    <button id="testWebhookBtn" disabled>Testa webhook</button>
+    <div class="status" id="step2Status"></div>
+  </section>
+
+  <section id="step3">
+    <h2>Steg 3 – Verifiera API-nyckel (valfritt)</h2>
+    <p>Om du använder n8n:s API-nyckel anger du den här för att testköra ett anrop mot <code>/rest/workflows</code>. Steget kan hoppas över om flödet är öppet för webhookar utan extra autentisering.</p>
+    <label for="apiKey">API-nyckel (X-N8N-API-KEY)</label>
+    <input id="apiKey" type="password" placeholder="Din n8n API-nyckel" value="{{ n8n_config['api_key'] }}" />
+    <button id="testApiBtn">Testa API-nyckel</button>
+    <div class="status" id="step3Status"></div>
+  </section>
+
+  <section id="step4">
+    <h2>Steg 4 – Spara och aktivera</h2>
+    <p>När du är nöjd sparas värdena i en lokal konfigurationsfil. Webhooken aktiveras direkt och kommande chattmeddelanden skickas till flödet.</p>
+    <button class="secondary" id="saveBtn">Spara konfiguration</button>
+    <div class="status" id="step4Status"></div>
+    {% if n8n_enabled %}
+    <p class="badge">Aktiv integration</p>
+    {% else %}
+    <p class="badge" style="background:#fef3c7;color:#b45309;">Ingen aktiv integration</p>
+    {% endif %}
+  </section>
+
+  <script>
+    const baseUrlInput = document.getElementById('baseUrl');
+    const webhookInput = document.getElementById('webhookPath');
+    const apiKeyInput = document.getElementById('apiKey');
+
+    const step1Status = document.getElementById('step1Status');
+    const step2Status = document.getElementById('step2Status');
+    const step3Status = document.getElementById('step3Status');
+    const step4Status = document.getElementById('step4Status');
+
+    const testBaseBtn = document.getElementById('testBaseBtn');
+    const testWebhookBtn = document.getElementById('testWebhookBtn');
+    const testApiBtn = document.getElementById('testApiBtn');
+    const saveBtn = document.getElementById('saveBtn');
+
+    function showStatus(el, ok, message) {
+      el.classList.remove('ok', 'error');
+      if (!message) {
+        el.textContent = '';
+        return;
+      }
+      el.textContent = message;
+      el.classList.add(ok ? 'ok' : 'error');
+    }
+
+    async function postForm(url, data) {
+      const formData = new FormData();
+      Object.entries(data).forEach(([key, value]) => formData.append(key, value ?? ''));
+      const res = await fetch(url, { method: 'POST', body: formData });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload.detail || payload.error || res.statusText);
+      }
+      return payload;
+    }
+
+    testBaseBtn.addEventListener('click', async () => {
+      showStatus(step1Status, true, 'Testar anslutning...');
+      testBaseBtn.disabled = true;
+      try {
+        const result = await postForm('/api/n8n/test-base', { base_url: baseUrlInput.value });
+        showStatus(step1Status, true, result.detail || 'Anslutning OK');
+        testWebhookBtn.disabled = false;
+      } catch (err) {
+        showStatus(step1Status, false, err.message);
+        testWebhookBtn.disabled = true;
+      } finally {
+        testBaseBtn.disabled = false;
+      }
+    });
+
+    testWebhookBtn.addEventListener('click', async () => {
+      showStatus(step2Status, true, 'Skickar testpayload...');
+      testWebhookBtn.disabled = true;
+      try {
+        const result = await postForm('/api/n8n/test-webhook', {
+          base_url: baseUrlInput.value,
+          webhook_path: webhookInput.value,
+        });
+        showStatus(step2Status, true, result.detail || 'Webhook OK');
+      } catch (err) {
+        showStatus(step2Status, false, err.message);
+      } finally {
+        testWebhookBtn.disabled = false;
+      }
+    });
+
+    testApiBtn.addEventListener('click', async () => {
+      const apiKey = apiKeyInput.value;
+      if (!apiKey) {
+        showStatus(step3Status, false, 'Ange en API-nyckel först.');
+        return;
+      }
+      showStatus(step3Status, true, 'Verifierar nyckel...');
+      testApiBtn.disabled = true;
+      try {
+        const result = await postForm('/api/n8n/test-api-key', {
+          base_url: baseUrlInput.value,
+          api_key: apiKey,
+        });
+        showStatus(step3Status, true, result.detail || 'API-nyckel OK');
+      } catch (err) {
+        showStatus(step3Status, false, err.message);
+      } finally {
+        testApiBtn.disabled = false;
+      }
+    });
+
+    saveBtn.addEventListener('click', async () => {
+      showStatus(step4Status, true, 'Sparar...');
+      saveBtn.disabled = true;
+      try {
+        const result = await postForm('/api/n8n/save', {
+          base_url: baseUrlInput.value,
+          webhook_path: webhookInput.value,
+          api_key: apiKeyInput.value,
+        });
+        showStatus(step4Status, true, result.detail || 'Sparad konfiguration');
+      } catch (err) {
+        showStatus(step4Status, false, err.message);
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
