@@ -22,8 +22,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from subprocess import Popen, PIPE, CalledProcessError, run
 
-# ---------------------- Hjälp ----------------------
-
 def load_config(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
@@ -31,12 +29,9 @@ def load_config(path: str) -> dict:
 def utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-# ---------------------- MQTT ----------------------
-
 class MqttClient:
     def __init__(self, cfg):
         self.cfg = cfg
-        # Använd callback API v1 (stabil signatur: on_connect(client, userdata, flags, rc))
         self.client = mqtt.Client(
             client_id=cfg["client_id"],
             callback_api_version=mqtt.CallbackAPIVersion.VERSION1,
@@ -48,7 +43,6 @@ class MqttClient:
         if username:
             self.client.username_pw_set(username, password)
 
-        # TLS
         if cfg.get("ca_certs"):
             self.client.tls_set(
                 ca_certs=cfg["ca_certs"],
@@ -59,7 +53,6 @@ class MqttClient:
                 ciphers=None,
             )
         else:
-            # Använd systemets CA
             self.client.tls_set(
                 cert_reqs=ssl.CERT_REQUIRED,
                 tls_version=ssl.PROTOCOL_TLS_CLIENT,
@@ -70,7 +63,7 @@ class MqttClient:
         self.client.on_disconnect = self._on_disconnect
         self.client.on_message = self._on_message
 
-        self.pending = {}  # corr_id -> queue.Queue()
+        self.pending = {}
         self._connected_evt = threading.Event()
 
     def connect(self):
@@ -80,11 +73,8 @@ class MqttClient:
         logging.info(f"Ansluter till MQTT {host}:{port} (TLS)")
         self.client.connect(host, port, keepalive=keepalive)
         self.client.loop_start()
-        # Vänta tills connected
         if not self._connected_evt.wait(timeout=10):
             raise RuntimeError("MQTT: anslutning misslyckades (timeout)")
-
-        # Prenumerera på bas-respons-topic (wildcard)
         base = self.cfg["base_response_topic"].rstrip("/")
         topic = f"{base}/#"
         self.client.subscribe(topic, qos=self.cfg.get("qos", 1))
@@ -126,15 +116,9 @@ class MqttClient:
             q.put(data)
 
     def request_reply(self, text: str, lang: str, qos: int = 1, timeout: int = 15):
-        """
-        Publicera förfrågan och vänta på svar från n8n.
-        n8n ska svara på reply_topic med samma corr_id.
-        """
         corr_id = str(uuid.uuid4())
         base = self.cfg["base_response_topic"].rstrip("/")
         reply_topic = f"{base}/{corr_id}"
-
-        # Skapa kö innan publicering
         q = queue.Queue()
         self.pending[corr_id] = q
 
@@ -163,8 +147,6 @@ class MqttClient:
         finally:
             self.pending.pop(corr_id, None)
 
-# ---------------------- Wake word + inspelning ----------------------
-
 class Recorder:
     def __init__(self, audio_cfg, wake_cfg):
         self.audio_cfg = audio_cfg
@@ -188,18 +170,15 @@ class Recorder:
         self.sample_rate = int(audio_cfg.get("sample_rate", 16000))
         self.input_device = audio_cfg.get("input_device", None)
 
-        # VAD
         self.vad = webrtcvad.Vad(int(audio_cfg.get("vad_aggressiveness", 2)))
-        self.frame_ms = 30  # 30 ms per VAD‑ram
+        self.frame_ms = 30
         self.silence_end_ms = int(audio_cfg.get("silence_end_ms", 800))
         self.max_utt_sec = int(audio_cfg.get("max_utterance_sec", 12))
 
-        # Porcupine använder egen frame_length/sample_rate
         self.pv_frame_len = self.porcupine.frame_length
         self.pv_sample_rate = self.porcupine.sample_rate
 
     def listen_for_wakeword(self, stop_evt: threading.Event):
-        """Blockerar och returnerar när wake word detekteras."""
         logging.info("Lyssnar efter väckningsfras...")
         with sd.RawInputStream(samplerate=self.pv_sample_rate,
                                blocksize=self.pv_frame_len,
@@ -214,16 +193,11 @@ class Recorder:
                 result = self.porcupine.process(pcm)
                 if result >= 0:
                     logging.info("Väckningsfras detekterad.")
-                    return  # Returnera till huvudflödet
+                    return
 
     def record_utterance(self) -> bytes:
-        """
-        Spela in en yttrande med VAD. Avslutar när tystnad >= silence_end_ms
-        eller när max_utterance_sec uppnåtts. Returnerar PCM16 bytes @ sample_rate.
-        """
         logging.info("Börjar inspelning...")
-        bytes_per_sample = 2  # int16
-        frame_size = int(self.sample_rate * self.frame_ms / 1000)  # samples per VAD‑frame
+        frame_size = int(self.sample_rate * self.frame_ms / 1000)
         blocksize = frame_size
 
         def is_speech(frame_bytes):
@@ -268,11 +242,9 @@ class Recorder:
     def save_wav(self, pcm_bytes: bytes, path: str):
         with wave.open(path, "wb") as wf:
             wf.setnchannels(1)
-            wf.setsampwidth(2)          # int16
+            wf.setsampwidth(2)
             wf.setframerate(self.sample_rate)
             wf.writeframes(pcm_bytes)
-
-# ---------------------- STT (Faster‑Whisper) ----------------------
 
 class LocalSTT:
     def __init__(self, stt_cfg, sample_rate: int):
@@ -296,8 +268,6 @@ class LocalSTT:
         text = "".join([seg.text for seg in segments]).strip()
         logging.info(f"STT: '{text}'")
         return text
-
-# ---------------------- TTS (Piper) ----------------------
 
 class PiperTTS:
     def __init__(self, tts_cfg):
@@ -327,8 +297,6 @@ class PiperTTS:
                 except Exception:
                     pass
 
-# ---------------------- Appens huvudlogik ----------------------
-
 class GenioAIApp:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -351,22 +319,18 @@ class GenioAIApp:
         self.mqtt.connect()
         while not self.stop_evt.is_set():
             try:
-                # 1) Lyssna på wake word
                 self.rec.listen_for_wakeword(self.stop_evt)
                 if self.stop_evt.is_set():
                     break
 
-                # 2) Spela in yttrandet
                 pcm = self.rec.record_utterance()
                 if not pcm or len(pcm) < self.rec.sample_rate * 2 * 0.2:
                     logging.info("Tomt/kort yttrande. Återgår till lyssning.")
                     continue
 
-                # Spara WAV temporärt
                 wav_path = f"/tmp/genio_rec_{uuid.uuid4().hex}.wav"
                 self.rec.save_wav(pcm, wav_path)
 
-                # 3) STT (lokalt)
                 text = self.stt.transcribe_file(wav_path)
                 try:
                     Path(wav_path).unlink(missing_ok=True)
@@ -377,7 +341,6 @@ class GenioAIApp:
                     self.tts.speak("Jag hörde inget. Försök igen.")
                     continue
 
-                # 3b) Skicka till n8n via MQTT och invänta svar
                 resp = self.mqtt.request_reply(
                     text=text,
                     lang=self.lang,
@@ -385,7 +348,6 @@ class GenioAIApp:
                     timeout=int(self.cfg["mqtt"].get("timeout_sec", 15))
                 )
 
-                # 4) Läs upp svaret via Piper
                 if resp is None:
                     self.tts.speak("Inget svar från arbetsflödet. Försök igen senare.")
                 else:
@@ -394,15 +356,12 @@ class GenioAIApp:
                         reply_text = "Jag fick ett tomt svar."
                     self.tts.speak(reply_text)
 
-                # 5) Redo för ny väckningsfras
                 logging.info("Redo för ny väckningsfras.")
             except Exception:
                 logging.exception("Oväntat fel i huvudloopen")
                 time.sleep(1)
 
         self.mqtt.close()
-
-# ---------------------- Entrypoint ----------------------
 
 def main():
     logging.basicConfig(

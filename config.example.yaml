@@ -1,18 +1,18 @@
 audio:
-  input_device: null         # ALSA-enhetsindex eller null för standard
-  sample_rate: 16000         # 16 kHz (Porcupine/Whisper/VAD)
-  vad_aggressiveness: 2      # 0-3 (högre = klipper snabbare tystnad)
-  max_utterance_sec: 12      # hård gräns på inspelningslängd
-  silence_end_ms: 800        # avsluta efter så här mycket tystnad
+  input_device: null
+  sample_rate: 16000
+  vad_aggressiveness: 2
+  max_utterance_sec: 12
+  silence_end_ms: 800
 
 wakeword:
   access_key_env: "PORCUPINE_ACCESS_KEY"
   keyword_path: "resources/porcupine/wakeword.ppn"
-  sensitivity: 0.55          # 0.0 - 1.0
+  sensitivity: 0.55
 
 stt:
   model_dir: "resources/whisper/whisper-small-ct2"
-  compute_type: "int8"       # int8, int8_float16, float16, float32
+  compute_type: "int8"
   language: "sv"
   beam_size: 5
 
@@ -27,7 +27,7 @@ mqtt:
   username_env: "MQTT_USERNAME"
   password_env: "MQTT_PASSWORD"
   client_id: "genio-ai-rpi5"
-  ca_certs: null             # null = systemets CA (rekommenderas)
+  ca_certs: null
   tls_insecure: false
   qos: 1
   request_topic: "genioai/request"
