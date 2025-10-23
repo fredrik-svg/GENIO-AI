@@ -2,16 +2,14 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Genio AI setup for Raspberry Pi 5 (Debian/Raspberry Pi OS)
+# Genio AI setup (v3) for Raspberry Pi 5 (Debian/Raspberry Pi OS)
 # Flags:
 #   --fresh           Remove and recreate .venv from scratch
 #   --python <spec>   Choose Python interpreter (e.g. '3.12', 'python3.12', '/usr/bin/python3.12')
 #
-# The script installs system packages (audio, build tools, ffmpeg),
-# creates an isolated venv, avoids PyAV, and installs Python deps.
-#
-# Note: The app does not require PyAV. If you hit build errors from 'av' on Python 3.13,
-# run this script with --fresh or specify --python 3.12
+# v3 notes:
+# - requirements.txt is minimal and does NOT include 'soundfile' or 'av'.
+# - The app does not need PyAV. We explicitly uninstall 'av' just in case.
 
 FRESH=0
 PY_REQ=""
@@ -31,46 +29,22 @@ Examples:
 USAGE
       exit 0
       ;;
-    *)
-      echo "Unknown argument: $1" >&2
-      exit 2
-      ;;
+    *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
 find_python() {
   local req="$1"
   if [[ -n "$req" ]]; then
-    # If it's a path
-    if [[ "$req" == */* ]]; then
-      echo "$req"
-      return 0
-    fi
-    # If it's a version like "3.12" or "3.11"
+    if [[ "$req" == */* ]]; then echo "$req"; return 0; fi
     if [[ "$req" =~ ^[0-9]+\.[0-9]+$ ]]; then
-      if command -v "python${req}" >/dev/null 2>&1; then
-        command -v "python${req}"
-        return 0
-      fi
-      if command -v "python3.${req#*.}" >/dev/null 2>&1; then
-        command -v "python3.${req#*.}"
-        return 0
-      fi
+      command -v "python${req}" >/dev/null 2>&1 && { command -v "python${req}"; return 0; }
+      command -v "python3.${req#*.}" >/dev/null 2>&1 && { command -v "python3.${req#*.}"; return 0; }
     fi
-    # Otherwise treat as a command name like "python3.12"
-    if command -v "$req" >/dev/null 2>&1; then
-      command -v "$req"
-      return 0
-    fi
+    command -v "$req" >/dev/null 2>&1 && { command -v "$req"; return 0; }
   fi
-
-  # Default preference order
-  if command -v python3.12 >/dev/null 2>&1; then
-    command -v python3.12; return 0
-  fi
-  if command -v python3.11 >/dev/null 2>&1; then
-    command -v python3.11; return 0
-  fi
+  command -v python3.12 >/dev/null 2>&1 && { command -v python3.12; return 0; }
+  command -v python3.11 >/dev/null 2>&1 && { command -v python3.11; return 0; }
   command -v python3
 }
 
@@ -80,13 +54,10 @@ cd "$SCRIPT_DIR"
 echo ">>> Installing system packages (audio, build tools, ffmpeg, BLAS) ..."
 sudo apt update
 sudo apt install -y \
-  python3-pip python3-venv python3-dev \
+  python3 python3-venv python3-dev \
   pkg-config build-essential \
   portaudio19-dev libportaudio2 libportaudiocpp0 alsa-utils \
-  libsndfile1-dev libopenblas-dev \
-  ffmpeg \
-  libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev \
-  libavfilter-dev libswscale-dev libswresample-dev
+  libsndfile1-dev libopenblas-dev ffmpeg
 
 PYBIN="$(find_python "$PY_REQ")"
 echo ">>> Using Python: $($PYBIN --version 2>&1)"
@@ -107,13 +78,15 @@ source .venv/bin/activate
 
 echo ">>> Upgrading pip/setuptools/wheel ..."
 pip install --upgrade pip setuptools wheel
+pip cache purge || true
 
-# Avoid PyAV (not required). If present from a previous environment, remove it.
+# Avoid PyAV entirely (not required). If present, remove it.
 pip uninstall -y av || true
 
-echo ">>> Installing Python dependencies (no cache) ..."
+echo ">>> Installing Python dependencies (minimal, no av/soundfile) ..."
 pip install --no-cache-dir -r requirements.txt
 
+# Create config.yaml on first run
 if [[ ! -f config.yaml ]]; then
   cp config.example.yaml config.yaml
   echo ">>> Created config.yaml from config.example.yaml"
@@ -127,25 +100,26 @@ PY
 )"
 if [[ "$PYVER" =~ ^3\.13\..* ]]; then
   cat <<'WARN'
-[!] Detected Python 3.13.
-    If you encounter build issues with third-party packages, consider installing Python 3.12:
-        sudo apt install -y python3.12 python3.12-venv python3.12-dev
-    Then rerun:
-        ./setup.sh --fresh --python 3.12
+[!] You are running Python 3.13.
+    That's OK for this project because requirements are minimal and do not
+    include PyAV. If any package tries to pull 'av' in, remove it:
+        pip uninstall -y av
+    or re-run:
+        ./setup.sh --fresh
 WARN
 fi
 
 cat << 'EOM'
 
 ============================================================
- Genio AI: setup complete ✅
+ Genio AI v3: setup complete ✅
 
 Place your models/files:
   - Porcupine (.ppn):     resources/porcupine/wakeword.ppn
   - Whisper (CT2):        resources/whisper/<ct2-model-dir>/
   - Piper (svenska ONNX): resources/piper/sv-voice.onnx (+ .json)
 
-Required environment variables:
+Required env:
   export PORCUPINE_ACCESS_KEY="pvac_*************"
   export MQTT_USERNAME="<hivemq-user>"
   export MQTT_PASSWORD="<hivemq-pass>"
