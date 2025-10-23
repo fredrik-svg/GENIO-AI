@@ -1,0 +1,18 @@
+[Unit]
+Description=Genio AI - svensk röstagent
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/genio-ai
+Environment=GENIO_CONFIG=/home/pi/genio-ai/config.yaml
+Environment=PORCUPINE_ACCESS_KEY=pvac_*************
+Environment=MQTT_USERNAME=*************
+Environment=MQTT_PASSWORD=*************
+ExecStart=/usr/bin/python3 /home/pi/genio-ai/genio_ai.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
