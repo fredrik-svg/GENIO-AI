@@ -22,12 +22,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from subprocess import Popen, PIPE, CalledProcessError, run
 
+# ---------------------- Hjälp ----------------------
+
 def load_config(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 def utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+# ---------------------- MQTT ----------------------
 
 class MqttClient:
     def __init__(self, cfg):
@@ -43,6 +47,7 @@ class MqttClient:
         if username:
             self.client.username_pw_set(username, password)
 
+        # TLS
         if cfg.get("ca_certs"):
             self.client.tls_set(
                 ca_certs=cfg["ca_certs"],
@@ -63,7 +68,7 @@ class MqttClient:
         self.client.on_disconnect = self._on_disconnect
         self.client.on_message = self._on_message
 
-        self.pending = {}
+        self.pending = {}  # corr_id -> queue.Queue()
         self._connected_evt = threading.Event()
 
     def connect(self):
@@ -75,6 +80,7 @@ class MqttClient:
         self.client.loop_start()
         if not self._connected_evt.wait(timeout=10):
             raise RuntimeError("MQTT: anslutning misslyckades (timeout)")
+
         base = self.cfg["base_response_topic"].rstrip("/")
         topic = f"{base}/#"
         self.client.subscribe(topic, qos=self.cfg.get("qos", 1))
@@ -119,6 +125,7 @@ class MqttClient:
         corr_id = str(uuid.uuid4())
         base = self.cfg["base_response_topic"].rstrip("/")
         reply_topic = f"{base}/{corr_id}"
+
         q = queue.Queue()
         self.pending[corr_id] = q
 
@@ -147,6 +154,8 @@ class MqttClient:
         finally:
             self.pending.pop(corr_id, None)
 
+# ---------------------- Wake word + inspelning ----------------------
+
 class Recorder:
     def __init__(self, audio_cfg, wake_cfg):
         self.audio_cfg = audio_cfg
@@ -157,19 +166,28 @@ class Recorder:
             raise RuntimeError("PORCUPINE_ACCESS_KEY saknas i miljön")
 
         keyword_path = wake_cfg["keyword_path"]
+        model_path = wake_cfg.get("model_path", None)
         sensitivity = float(wake_cfg.get("sensitivity", 0.5))
+
         if not Path(keyword_path).exists():
             raise FileNotFoundError(f"Saknar wakeword‑fil: {keyword_path}")
+        if model_path is not None and not Path(model_path).exists():
+            raise FileNotFoundError(f"Saknar Porcupine språkmodell (.pv): {model_path}")
 
-        self.porcupine = pvporcupine.create(
+        kwargs = dict(
             access_key=access_key,
             keyword_paths=[keyword_path],
             sensitivities=[sensitivity],
         )
+        if model_path:
+            kwargs["model_path"] = model_path
+
+        self.porcupine = pvporcupine.create(**kwargs)
 
         self.sample_rate = int(audio_cfg.get("sample_rate", 16000))
         self.input_device = audio_cfg.get("input_device", None)
 
+        # VAD
         self.vad = webrtcvad.Vad(int(audio_cfg.get("vad_aggressiveness", 2)))
         self.frame_ms = 30
         self.silence_end_ms = int(audio_cfg.get("silence_end_ms", 800))
@@ -246,6 +264,8 @@ class Recorder:
             wf.setframerate(self.sample_rate)
             wf.writeframes(pcm_bytes)
 
+# ---------------------- STT (Faster‑Whisper) ----------------------
+
 class LocalSTT:
     def __init__(self, stt_cfg, sample_rate: int):
         model_dir = stt_cfg["model_dir"]
@@ -268,6 +288,8 @@ class LocalSTT:
         text = "".join([seg.text for seg in segments]).strip()
         logging.info(f"STT: '{text}'")
         return text
+
+# ---------------------- TTS (Piper) ----------------------
 
 class PiperTTS:
     def __init__(self, tts_cfg):
@@ -296,6 +318,8 @@ class PiperTTS:
                     Path(wav_path).unlink(missing_ok=True)
                 except Exception:
                     pass
+
+# ---------------------- Appens huvudlogik ----------------------
 
 class GenioAIApp:
     def __init__(self, cfg):
@@ -362,6 +386,8 @@ class GenioAIApp:
                 time.sleep(1)
 
         self.mqtt.close()
+
+# ---------------------- Entrypoint ----------------------
 
 def main():
     logging.basicConfig(
