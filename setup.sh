@@ -2,21 +2,28 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Genio AI setup (v4) for Raspberry Pi 5 (Debian/Raspberry Pi OS)
+# Genio AI setup (v5) for Raspberry Pi 5 (Debian/Raspberry Pi OS)
 # Flags:
-#   --fresh           Remove and recreate .venv from scratch
-#   --python <spec>   Choose Python interpreter (e.g. '3.12', 'python3.12', '/usr/bin/python3.12')
+#   --fresh             Remove and recreate .venv from scratch
+#   --python <spec>     Choose Python interpreter (e.g. '3.12', 'python3.12', '/usr/bin/python3.12')
+#   --no-strict         Install with normal dependency resolution (disables --no-deps strict mode)
+#
+# Default: STRICT mode is ON (uses --no-deps and installs explicit package list). If strict mode fails,
+# a fallback to normal 'pip install -r requirements.txt' is attempted automatically.
+# Use --no-strict to skip strict mode and install normally from requirements.txt.
 
 FRESH=0
 PY_REQ=""
+STRICT=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --fresh) FRESH=1; shift ;;
     --python) PY_REQ="${2:-}"; shift 2 ;;
+    --no-strict) STRICT=0; shift ;;
     -h|--help)
       cat <<'USAGE'
-Usage: ./setup.sh [--fresh] [--python <3.12|python3.12|/path/to/python>]
+Usage: ./setup.sh [--fresh] [--python <3.12|python3.12|/path/to/python>] [--no-strict]
 USAGE
       exit 0
       ;;
@@ -42,11 +49,12 @@ find_python() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo ">>> Installing system packages (audio, build tools, ffmpeg, BLAS, git-lfs) ..."
+echo ">>> Installing system packages (audio, build tools, ffmpeg, BLAS, git-lfs, libffi-dev) ..."
 sudo apt update
 sudo apt install -y \
   python3 python3-venv python3-dev \
   pkg-config build-essential \
+  libffi-dev \
   portaudio19-dev libportaudio2 libportaudiocpp0 alsa-utils \
   libsndfile1-dev libopenblas-dev ffmpeg \
   git git-lfs
@@ -70,18 +78,44 @@ echo ">>> Activating venv ..."
 # shellcheck disable=SC1091
 source .venv/bin/activate || { echo "[!] Could not activate venv. Is python3-venv installed?"; exit 1; }
 
-# Ensure pip exists in the venv (Debian sometimes omits it if venv was created without python3-venv)
+# Ensure pip exists in the venv (Debian sometimes omits it if venv was created without python3-venv earlier)
 python -m ensurepip --upgrade || true
 
 echo ">>> Upgrading pip/setuptools/wheel ..."
 python -m pip install --upgrade pip setuptools wheel
 pip cache purge || true
+hash -r || true
 
 # Avoid PyAV entirely (not required). If present, remove it.
 pip uninstall -y av || true
 
-echo ">>> Installing Python dependencies (minimal, no av/soundfile) ..."
-pip install --no-cache-dir -r requirements.txt
+if [[ "$STRICT" == "1" ]]; then
+  echo ">>> STRICT mode: installing explicit packages with --no-deps ..."
+  set +e
+  # Explicit list incl. runtime deps often pulled transitively:
+  # - tokenizers (required by faster-whisper), cffi+pycparser (for sounddevice on some platforms)
+  pip install --no-cache-dir --no-deps \
+    numpy==1.* \
+    paho-mqtt==2.* \
+    PyYAML==6.* \
+    pvporcupine==3.* \
+    webrtcvad==2.* \
+    ctranslate2==4.* \
+    faster-whisper==0.10.* \
+    tokenizers>=0.13,<1 \
+    sounddevice==0.4.* \
+    cffi>=1.15,<2 \
+    pycparser>=2.21,<3
+  STRICT_RC=$?
+  set -e
+  if [[ $STRICT_RC -ne 0 ]]; then
+    echo "[!] STRICT install failed (likely due to missing wheels on this Python/arch). Falling back to normal install ..."
+    pip install --no-cache-dir -r requirements.txt
+  fi
+else
+  echo ">>> Non-strict mode: installing from requirements.txt (normal dependency resolution) ..."
+  pip install --no-cache-dir -r requirements.txt
+fi
 
 if [[ ! -f config.yaml ]]; then
   cp config.example.yaml config.yaml
@@ -91,22 +125,21 @@ fi
 cat << 'EOM'
 
 ============================================================
- Genio AI v4: setup complete ✅
-
-Model download helpers (no pip needed):
-  - Porcupine (sv .pv):   ./scripts/download_porcupine_sv.sh
-  - Whisper (CT2 via LFS): ./scripts/download_whisper_git.sh small   # tiny|base|small|medium|large-v3
-  - Piper (sv röst):       ./scripts/download_piper_sv.sh sv_SE-lisa-medium
-
-If you later want to use Hugging Face Python downloader:
-  - Optional deps:  pip install -r requirements-optional.txt
-  - Then:           ./scripts/download_with_hf.py Systran/faster-whisper-small resources/whisper/whisper-small-ct2
+ Genio AI v5: setup complete ✅
 
 If you ever see: "-bash: .../.venv/bin/pip: No such file or directory"
   1) Ensure venv exists and is activated:   source .venv/bin/activate
   2) Bootstrap pip inside venv:             python -m ensurepip --upgrade
-  3) Or rebuild venv cleanly:               ./setup.sh --fresh
-  4) Clear any old shell hash:              hash -r
+  3) Rebuild venv cleanly:                  ./setup.sh --fresh
+  4) Clear shell path cache:                hash -r
+
+Model download helpers (no pip needed):
+  - Porcupine (sv .pv):    ./scripts/download_porcupine_sv.sh
+  - Whisper (CT2 via LFS): ./scripts/download_whisper_git.sh small   # tiny|base|small|medium|large-v3
+  - Piper (sv röst):        ./scripts/download_piper_sv.sh sv_SE-lisa-medium
+
+Diagnose if something tries to install 'av':
+  ./scripts/diagnose_av.sh
 
 Run the app:
   source .venv/bin/activate

@@ -1,23 +1,46 @@
 
-## 📥 Modeller – snabbkommandon (utan pip)
-```bash
-./scripts/download_porcupine_sv.sh
-./scripts/download_whisper_git.sh small
-./scripts/download_piper_sv.sh sv_SE-lisa-medium
-```
+---
 
-## 🧰 Hugging Face CLI / pip-fel
-Får du `-bash: .../.venv/bin/pip: No such file or directory`?
+## ❗ Varför får jag `-bash: .../.venv/bin/pip: No such file or directory`?
+
+Det betyder att din `pip`-sökväg pekar på en **icke-existerande** venv (t.ex. efter ominstallation eller `--fresh`), eller att ett alias/kommandocache pekar fel.
+
+**Snabbfix (kör i projektkatalogen):**
 ```bash
-# 1) Aktivera venv
+# rensa ev. gammal venv och bygg om
+./setup.sh --fresh
+
+# aktivera ny venv
 source .venv/bin/activate
 
-# 2) Bootstrappa pip inuti venv
-python -m ensurepip --upgrade
+# installera Hugging Face CLI (om du vill använda snapshot_download)
+python -m pip install -U huggingface_hub
+```
 
-# 3) Uppgradera verktyg
-python -m pip install --upgrade pip setuptools wheel
+**Om felet kvarstår, felsök:**
+```bash
+# Finns filen?
+ls -l .venv/bin/python .venv/bin/pip || echo "saknas"
 
-# 4) Om det fortfarande strular: bygg om venv
-./setup.sh --fresh
+# Rensa shell-cache och alias för 'pip'
+hash -r
+unalias pip 2>/dev/null || true
+type -a pip
+
+# Använd alltid robust form inne i venv:
+python -m pip --version
+python -m pip install -U huggingface_hub
+```
+
+**Alternativ utan HF-CLI:** använd våra script i `scripts/`  
+- `scripts/download_whisper_ct2.sh` (git-lfs)  
+- `scripts/voices.sh` (Piper-röst)  
+- `scripts/download_porcupine_sv_pv.sh` (svensk Porcupine .pv)
+
+## 🩺 Diagnostik
+Om du ser att `pip` saknas eller att `av` försöker byggas:
+```bash
+./scripts/doctor.sh
+# eller återskapa venv:
+./scripts/fix_venv.sh --python 3.12   # om 3.12 finns, annars utan flagga
 ```
