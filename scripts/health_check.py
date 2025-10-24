@@ -157,8 +157,13 @@ def main():
         
         model_path = wakeword_cfg.get("model_path")
         if model_path:
-            if not check_file(model_path, "Porcupine språkmodell (.pv)"):
-                all_checks_ok = False
+            if Path(model_path).exists():
+                print(f"✅ Porcupine språkmodell (.pv): {model_path}")
+            else:
+                print(f"⚠️  Porcupine språkmodell (.pv) saknas: {model_path}")
+                print(f"    Inbyggd standardmodell kommer användas istället")
+        else:
+            print(f"ℹ️  Porcupine språkmodell inte konfigurerad, använder inbyggd standardmodell")
         
         # STT
         stt_cfg = cfg.get("stt", {})
