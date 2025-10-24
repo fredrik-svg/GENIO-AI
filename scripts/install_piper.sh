@@ -106,7 +106,7 @@ if [[ -f /usr/local/bin/piper ]]; then
         read -r -t 30 REPLY || REPLY="N"
     else
         # Non-interactive mode - skip by default
-        echo "    Running in non-interactive mode. Skipping (use --force to override)."
+        echo "    Running in non-interactive mode. Skipping replacement."
         REPLY="N"
     fi
     if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
