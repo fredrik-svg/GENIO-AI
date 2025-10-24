@@ -550,6 +550,8 @@ def main():
         cfg = load_config(cfg_path)
         
         # Validate environment variables (only check names, never log values)
+        # Note: We only log environment variable NAMES (e.g., "MQTT_PASSWORD"),
+        # never the actual sensitive values
         required_env_vars = [
             cfg["wakeword"]["access_key_env"],
             cfg["mqtt"]["username_env"],
@@ -562,10 +564,11 @@ def main():
                 missing_vars.append(env_var_name)
         
         if missing_vars:
-            # Log only variable names, not values
+            # Safe: Log only variable names, not values
             logging.error(f"Saknade miljövariabler: {', '.join(missing_vars)}")
             print(f"Följande miljövariabler måste sättas:", file=sys.stderr)
             for env_var_name in missing_vars:
+                # Safe: Only printing variable name, no sensitive data
                 print(f"  - {env_var_name}", file=sys.stderr)
             sys.exit(1)
         

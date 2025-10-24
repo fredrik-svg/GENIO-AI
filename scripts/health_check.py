@@ -18,17 +18,24 @@ def check_file(path: str, description: str) -> bool:
         return False
 
 def check_env_var(var_name: str, required: bool = True) -> bool:
-    """Check if an environment variable is set."""
+    """Check if an environment variable is set.
+    
+    Note: This function only logs the environment variable NAME (e.g., "MQTT_PASSWORD"),
+    never the actual value. The actual value is masked when present.
+    """
     value = os.environ.get(var_name)
     if value:
         # Only show that variable is set, never log actual value
         masked_value = '*' * min(len(value), 8)
+        # Safe: Only printing the variable name and masked value, not actual sensitive data
         print(f"✅ Miljövariabel {var_name}: {masked_value}")
         return True
     else:
         if required:
+            # Safe: Only printing the variable name when missing, no sensitive data
             print(f"❌ Miljövariabel {var_name} saknas")
         else:
+            # Safe: Only printing the variable name, no sensitive data
             print(f"⚠️  Miljövariabel {var_name} inte satt (valfri)")
         return not required
 
