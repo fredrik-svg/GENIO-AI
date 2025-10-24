@@ -55,16 +55,31 @@ def utc_iso() -> str:
 class MqttClient:
     def __init__(self, cfg):
         self.cfg = cfg
+        
+        # Get clean_session parameter from config (default to True for MQTTv311)
+        clean_session = bool(cfg.get("clean_session", True))
+        
         self.client = mqtt.Client(
-            client_id=cfg["client_id"],
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            client_id=cfg["client_id"],
+            clean_session=clean_session,
+            protocol=mqtt.MQTTv311,
         )
         self.client.enable_logger(logging.getLogger("paho-mqtt"))
 
-        username = os.environ.get(cfg["username_env"], "")
-        password = os.environ.get(cfg["password_env"], "")
-        if username:
+        # Get credentials from environment variables
+        username = os.environ.get(cfg["username_env"], "").strip()
+        password = os.environ.get(cfg["password_env"], "").strip()
+        
+        # Only set credentials if both username and password are provided
+        if username and password:
             self.client.username_pw_set(username, password)
+            logging.debug(f"MQTT-autentisering konfigurerad för användare: {username}")
+        elif username or password:
+            # Warn if only one credential is provided
+            logging.warning(f"MQTT-autentisering ofullständig: användarnamn={'satt' if username else 'saknas'}, lösenord={'satt' if password else 'saknas'}")
+        else:
+            logging.info("MQTT ansluter utan autentisering")
 
         if cfg.get("ca_certs"):
             self.client.tls_set(
@@ -139,7 +154,21 @@ class MqttClient:
             self._connected_evt.set()
             self._connection_attempts = 0
         else:
-            logging.error(f"MQTT anslutningsfel: reason_code={reason_code}")
+            # Provide more helpful error messages based on reason code
+            error_messages = {
+                1: "Protokollversion stöds inte",
+                2: "Klient-ID avvisad",
+                3: "Server otillgänglig",
+                4: "Felaktigt användarnamn eller lösenord",
+                5: "Ej auktoriserad - kontrollera inloggningsuppgifter",
+            }
+            error_msg = error_messages.get(reason_code, f"Okänt fel (kod {reason_code})")
+            logging.error(f"MQTT anslutningsfel: reason_code={reason_code} ({error_msg})")
+            
+            # Additional troubleshooting hints for common errors
+            if reason_code == 4 or reason_code == 5:
+                # Safe: Only logging environment variable NAMES, not the actual sensitive values
+                logging.error(f"Kontrollera att miljövariabler {self.cfg['username_env']} och {self.cfg['password_env']} är korrekt satta")
 
     def _on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties):
         logging.warning(f"MQTT frånkopplad: reason_code={reason_code}")
