@@ -167,6 +167,7 @@ class MqttClient:
             
             # Additional troubleshooting hints for common errors
             if reason_code == 4 or reason_code == 5:
+                # Safe: Only logging environment variable NAMES, not the actual sensitive values
                 logging.error(f"Kontrollera att miljövariabler {self.cfg['username_env']} och {self.cfg['password_env']} är korrekt satta")
 
     def _on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties):
