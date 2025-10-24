@@ -48,8 +48,15 @@ if ! command -v espeak-ng &> /dev/null; then
     echo "   Piper requires espeak-ng to function properly."
     echo "   Install it with: sudo apt install espeak-ng"
     echo ""
-    echo -n "   Continue anyway? [y/N] "
-    read -r REPLY
+    if [[ -t 0 ]]; then
+        # Interactive mode
+        echo -n "   Continue anyway? [y/N] "
+        read -r -t 30 REPLY || REPLY="N"
+    else
+        # Non-interactive mode - fail safely
+        echo "   Running in non-interactive mode. Please install espeak-ng first."
+        REPLY="N"
+    fi
     if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
         echo "   Aborting installation."
         exit 1
@@ -93,8 +100,15 @@ echo "    Version: $PIPER_VERSION_OUTPUT"
 echo ">>> Installing to /usr/local/bin/piper (requires sudo)..."
 if [[ -f /usr/local/bin/piper ]]; then
     echo "    Piper already exists at /usr/local/bin/piper"
-    echo -n "    Replace it? [y/N] "
-    read -r REPLY
+    if [[ -t 0 ]]; then
+        # Interactive mode
+        echo -n "    Replace it? [y/N] "
+        read -r -t 30 REPLY || REPLY="N"
+    else
+        # Non-interactive mode - skip by default
+        echo "    Running in non-interactive mode. Skipping (use --force to override)."
+        REPLY="N"
+    fi
     if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
         echo "    Skipping installation."
         exit 0
