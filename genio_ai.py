@@ -150,7 +150,7 @@ class MqttClient:
 
     def _on_connect(self, client, userdata, flags, reason_code, properties):
         # Convert ReasonCode object to int for comparisons and dict lookups
-        rc = int(reason_code) if hasattr(reason_code, 'value') else reason_code
+        rc = int(reason_code) if not isinstance(reason_code, int) else reason_code
         
         if rc == 0:
             logging.info("MQTT ansluten.")
@@ -175,7 +175,7 @@ class MqttClient:
 
     def _on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties):
         # Convert ReasonCode object to int for comparisons
-        rc = int(reason_code) if hasattr(reason_code, 'value') else reason_code
+        rc = int(reason_code) if not isinstance(reason_code, int) else reason_code
         
         logging.warning(f"MQTT frånkopplad: reason_code={rc}")
         self._connected_evt.clear()
