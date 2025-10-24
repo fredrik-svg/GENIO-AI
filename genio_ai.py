@@ -158,26 +158,72 @@ class MqttClient:
             self._connection_attempts = 0
         else:
             # Provide more helpful error messages based on reason code
+            # Includes both MQTT v3.1.1 (1-5) and MQTT v5.0 (128+) codes
             error_messages = {
+                # MQTT v3.1.1 codes
                 1: "Protokollversion stöds inte",
                 2: "Klient-ID avvisad",
                 3: "Server otillgänglig",
                 4: "Felaktigt användarnamn eller lösenord",
                 5: "Ej auktoriserad - kontrollera inloggningsuppgifter",
+                # MQTT v5.0 codes
+                128: "Ospecificerat fel",
+                129: "Felformaterat paket",
+                130: "Protokollfel",
+                131: "Implementationsspecifikt fel",
+                132: "Protokollversion stöds inte",
+                133: "Klient-ID är ogiltigt",
+                134: "Felaktigt användarnamn eller lösenord",
+                135: "Ej auktoriserad - kontrollera inloggningsuppgifter och behörigheter",
+                136: "Server otillgänglig",
+                137: "Server upptagen",
+                138: "Utestängd (banned)",
+                140: "Felaktigt autentiseringsmetod",
+                144: "Ogiltigt topic-namn",
+                149: "Paket för stort",
+                151: "Kvothöjd nådd",
+                153: "Administrativ åtgärd",
+                154: "Payload-format ogiltigt",
             }
             error_msg = error_messages.get(rc, f"Okänt fel (kod {rc})")
             logging.error(f"MQTT anslutningsfel: reason_code={rc} ({error_msg})")
             
             # Additional troubleshooting hints for common errors
-            if rc == 4 or rc == 5:
+            if rc in [4, 5, 134, 135]:
                 # Safe: Only logging environment variable NAMES, not the actual sensitive values
                 logging.error(f"Kontrollera att miljövariabler {self.cfg['username_env']} och {self.cfg['password_env']} är korrekt satta")
+                logging.error(f"Verifiera att användarnamn och lösenord matchar vad som är konfigurerat i MQTT-brokern")
+                if rc == 135:
+                    logging.error(f"Kontrollera även ACL (Access Control List) behörigheter i MQTT-brokern för topics: {self.cfg['request_topic']} och {self.cfg['base_response_topic']}")
 
     def _on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties):
         # Convert ReasonCode object to int for comparisons
         rc = reason_code.value if hasattr(reason_code, 'value') else reason_code
         
-        logging.warning(f"MQTT frånkopplad: reason_code={rc}")
+        # Provide helpful disconnect reason messages
+        disconnect_messages = {
+            0: "Normal frånkoppling",
+            4: "Frånkopplad med Will-meddelande",
+            128: "Ospecificerat fel",
+            129: "Felformaterat paket",
+            130: "Protokollfel",
+            131: "Implementationsspecifikt fel",
+            135: "Ej auktoriserad",
+            137: "Server upptagen",
+            141: "Sessionen överförd",
+            142: "Keep-alive timeout",
+            143: "Sessionen stängd",
+            144: "Felaktigt filter",
+            147: "Receive maximum överskreds",
+            148: "Topic alias ogiltigt",
+            149: "Paket för stort",
+            150: "Meddelandefrekvens för hög",
+            151: "Kvothöjd nådd",
+            152: "Administrativ åtgärd",
+            153: "Payload-format ogiltigt",
+        }
+        disconnect_msg = disconnect_messages.get(rc, f"Okänt fel (kod {rc})")
+        logging.warning(f"MQTT frånkopplad: reason_code={rc} ({disconnect_msg})")
         self._connected_evt.clear()
         
         # Automatic reconnection for unexpected disconnects
