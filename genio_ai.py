@@ -74,10 +74,10 @@ class MqttClient:
         # Only set credentials if both username and password are provided
         if username and password:
             self.client.username_pw_set(username, password)
-            logging.debug(f"MQTT credentials set for user: {username}")
+            logging.debug(f"MQTT-autentisering konfigurerad för användare: {username}")
         elif username or password:
             # Warn if only one credential is provided
-            logging.warning(f"MQTT credentials incomplete: username={'set' if username else 'missing'}, password={'set' if password else 'missing'}")
+            logging.warning(f"MQTT-autentisering ofullständig: användarnamn={'satt' if username else 'saknas'}, lösenord={'satt' if password else 'saknas'}")
         else:
             logging.info("MQTT ansluter utan autentisering")
 
@@ -156,13 +156,13 @@ class MqttClient:
         else:
             # Provide more helpful error messages based on reason code
             error_messages = {
-                1: "Protocol version not supported",
-                2: "Client identifier rejected",
-                3: "Server unavailable",
-                4: "Bad username or password",
-                5: "Not authorized - check credentials",
+                1: "Protokollversion stöds inte",
+                2: "Klient-ID avvisad",
+                3: "Server otillgänglig",
+                4: "Felaktigt användarnamn eller lösenord",
+                5: "Ej auktoriserad - kontrollera inloggningsuppgifter",
             }
-            error_msg = error_messages.get(reason_code, f"Unknown error (code {reason_code})")
+            error_msg = error_messages.get(reason_code, f"Okänt fel (kod {reason_code})")
             logging.error(f"MQTT anslutningsfel: reason_code={reason_code} ({error_msg})")
             
             # Additional troubleshooting hints for common errors
