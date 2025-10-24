@@ -581,6 +581,7 @@ def main():
             
             print(f"\n💡 Felsökning:", file=sys.stderr)
             print(f"  1. Kontrollera att du stavat variabelnamnen rätt", file=sys.stderr)
+            # Safe: At least one list is non-empty due to condition on line 570
             first_var = missing_vars[0] if missing_vars else empty_vars[0]
             print(f"  2. Kör 'echo ${first_var}' för att verifiera värdet", file=sys.stderr)
             print(f"  3. Exportera variabler i SAMMA terminal där du kör scriptet", file=sys.stderr)
