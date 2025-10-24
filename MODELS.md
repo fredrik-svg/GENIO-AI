@@ -3,11 +3,12 @@
 ## Porcupine (svenska)
 - `scripts/download_porcupine_sv.sh` hämtar `porcupine_params_sv.pv`.
 - Lägg din `wakeword.ppn` (skapad i Picovoice Console) i `resources/porcupine/`.
+- **OBS:** `model_path` är valfri. Om den svenska modellfilen inte finns eller saknas, använder Porcupine sin inbyggda standardmodell istället.
 - Sätt i `config.yaml`:
   ```yaml
   wakeword:
     keyword_path: resources/porcupine/wakeword.ppn
-    model_path:   resources/porcupine/porcupine_params_sv.pv
+    model_path:   resources/porcupine/porcupine_params_sv.pv  # Valfri
   ```
 
 ## Whisper (Faster-Whisper, CTranslate2)

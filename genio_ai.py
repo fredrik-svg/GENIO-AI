@@ -233,8 +233,22 @@ class Recorder:
 
         if not Path(keyword_path).exists():
             raise FileNotFoundError(f"Saknar wakeword-fil: {keyword_path}")
-        if model_path is not None and not Path(model_path).exists():
-            raise FileNotFoundError(f"Saknar Porcupine språkmodell (.pv): {model_path}")
+        
+        # Make model_path optional: skip if None, empty, or file doesn't exist
+        # Porcupine will use its built-in default model when model_path is not provided
+        use_model_path = False
+        if model_path:
+            model_path = model_path.strip()
+            if model_path and Path(model_path).exists():
+                use_model_path = True
+                logging.info(f"Använder Porcupine språkmodell: {model_path}")
+            else:
+                if model_path:
+                    logging.warning(f"Porcupine språkmodell saknas ({model_path}), använder inbyggd standardmodell")
+                else:
+                    logging.info("Använder inbyggd Porcupine standardmodell")
+        else:
+            logging.info("Använder inbyggd Porcupine standardmodell")
 
         try:
             kwargs = dict(
@@ -242,7 +256,7 @@ class Recorder:
                 keyword_paths=[keyword_path],
                 sensitivities=[sensitivity],
             )
-            if model_path:
+            if use_model_path:
                 kwargs["model_path"] = model_path
 
             self.porcupine = pvporcupine.create(**kwargs)
