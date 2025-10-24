@@ -149,7 +149,10 @@ class MqttClient:
             logging.warning(f"Fel vid stängning av MQTT: {e}")
 
     def _on_connect(self, client, userdata, flags, reason_code, properties):
-        if reason_code == 0:
+        # Convert ReasonCode object to int for comparisons and dict lookups
+        rc = int(reason_code) if not isinstance(reason_code, int) else reason_code
+        
+        if rc == 0:
             logging.info("MQTT ansluten.")
             self._connected_evt.set()
             self._connection_attempts = 0
@@ -162,20 +165,23 @@ class MqttClient:
                 4: "Felaktigt användarnamn eller lösenord",
                 5: "Ej auktoriserad - kontrollera inloggningsuppgifter",
             }
-            error_msg = error_messages.get(reason_code, f"Okänt fel (kod {reason_code})")
-            logging.error(f"MQTT anslutningsfel: reason_code={reason_code} ({error_msg})")
+            error_msg = error_messages.get(rc, f"Okänt fel (kod {rc})")
+            logging.error(f"MQTT anslutningsfel: reason_code={rc} ({error_msg})")
             
             # Additional troubleshooting hints for common errors
-            if reason_code == 4 or reason_code == 5:
+            if rc == 4 or rc == 5:
                 # Safe: Only logging environment variable NAMES, not the actual sensitive values
                 logging.error(f"Kontrollera att miljövariabler {self.cfg['username_env']} och {self.cfg['password_env']} är korrekt satta")
 
     def _on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties):
-        logging.warning(f"MQTT frånkopplad: reason_code={reason_code}")
+        # Convert ReasonCode object to int for comparisons
+        rc = int(reason_code) if not isinstance(reason_code, int) else reason_code
+        
+        logging.warning(f"MQTT frånkopplad: reason_code={rc}")
         self._connected_evt.clear()
         
         # Automatic reconnection for unexpected disconnects
-        if reason_code != 0:
+        if rc != 0:
             with self._reconnect_lock:
                 self._connection_attempts += 1
                 if self._connection_attempts <= self._max_reconnect_attempts:
