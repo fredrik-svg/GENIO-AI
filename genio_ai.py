@@ -5,7 +5,6 @@ import sys
 import time
 import json
 import uuid
-import wave
 import queue
 import signal
 import logging
@@ -22,16 +21,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from subprocess import Popen, PIPE, CalledProcessError, run
 
-# ---------------------- Hjälp ----------------------
-
 def load_config(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 def utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-# ---------------------- MQTT ----------------------
 
 class MqttClient:
     def __init__(self, cfg):
@@ -47,7 +42,6 @@ class MqttClient:
         if username:
             self.client.username_pw_set(username, password)
 
-        # TLS
         if cfg.get("ca_certs"):
             self.client.tls_set(
                 ca_certs=cfg["ca_certs"],
@@ -68,7 +62,7 @@ class MqttClient:
         self.client.on_disconnect = self._on_disconnect
         self.client.on_message = self._on_message
 
-        self.pending = {}  # corr_id -> queue.Queue()
+        self.pending = {}
         self._connected_evt = threading.Event()
 
     def connect(self):
@@ -154,8 +148,6 @@ class MqttClient:
         finally:
             self.pending.pop(corr_id, None)
 
-# ---------------------- Wake word + inspelning ----------------------
-
 class Recorder:
     def __init__(self, audio_cfg, wake_cfg):
         self.audio_cfg = audio_cfg
@@ -187,7 +179,6 @@ class Recorder:
         self.sample_rate = int(audio_cfg.get("sample_rate", 16000))
         self.input_device = audio_cfg.get("input_device", None)
 
-        # VAD
         self.vad = webrtcvad.Vad(int(audio_cfg.get("vad_aggressiveness", 2)))
         self.frame_ms = 30
         self.silence_end_ms = int(audio_cfg.get("silence_end_ms", 800))
@@ -257,15 +248,6 @@ class Recorder:
         pcm = b"".join(frames)
         return pcm
 
-    def save_wav(self, pcm_bytes: bytes, path: str):
-        with wave.open(path, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(self.sample_rate)
-            wf.writeframes(pcm_bytes)
-
-# ---------------------- STT (Faster‑Whisper) ----------------------
-
 class LocalSTT:
     def __init__(self, stt_cfg, sample_rate: int):
         model_dir = stt_cfg["model_dir"]
@@ -277,9 +259,11 @@ class LocalSTT:
         logging.info(f"Laddar Faster‑Whisper från: {model_dir} (compute_type={compute_type})")
         self.model = WhisperModel(model_dir, device="cpu", compute_type=compute_type)
 
-    def transcribe_file(self, wav_path: str) -> str:
+    def transcribe_pcm(self, pcm_bytes: bytes) -> str:
+        # Konvertera PCM int16 -> float32 [-1, 1] @ 16 kHz
+        pcm = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
         segments, info = self.model.transcribe(
-            wav_path,
+            pcm,
             beam_size=self.beam_size,
             language=self.language,
             vad_filter=True,
@@ -288,8 +272,6 @@ class LocalSTT:
         text = "".join([seg.text for seg in segments]).strip()
         logging.info(f"STT: '{text}'")
         return text
-
-# ---------------------- TTS (Piper) ----------------------
 
 class PiperTTS:
     def __init__(self, tts_cfg):
@@ -318,8 +300,6 @@ class PiperTTS:
                     Path(wav_path).unlink(missing_ok=True)
                 except Exception:
                     pass
-
-# ---------------------- Appens huvudlogik ----------------------
 
 class GenioAIApp:
     def __init__(self, cfg):
@@ -352,14 +332,8 @@ class GenioAIApp:
                     logging.info("Tomt/kort yttrande. Återgår till lyssning.")
                     continue
 
-                wav_path = f"/tmp/genio_rec_{uuid.uuid4().hex}.wav"
-                self.rec.save_wav(pcm, wav_path)
-
-                text = self.stt.transcribe_file(wav_path)
-                try:
-                    Path(wav_path).unlink(missing_ok=True)
-                except Exception:
-                    pass
+                # Transkribera direkt från PCM-array (ingen fil-avkodning; undviker PyAV-behov)
+                text = self.stt.transcribe_pcm(pcm)
 
                 if not text:
                     self.tts.speak("Jag hörde inget. Försök igen.")
@@ -386,8 +360,6 @@ class GenioAIApp:
                 time.sleep(1)
 
         self.mqtt.close()
-
-# ---------------------- Entrypoint ----------------------
 
 def main():
     logging.basicConfig(

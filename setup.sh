@@ -2,15 +2,18 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Genio AI setup (v5) for Raspberry Pi 5 (Debian/Raspberry Pi OS)
+# Genio AI setup (v7) for Raspberry Pi 5 (Debian/Raspberry Pi OS)
 # Flags:
 #   --fresh             Remove and recreate .venv from scratch
 #   --python <spec>     Choose Python interpreter (e.g. '3.12', 'python3.12', '/usr/bin/python3.12')
 #   --no-strict         Install with normal dependency resolution (disables --no-deps strict mode)
 #
-# Default: STRICT mode is ON (uses --no-deps and installs explicit package list). If strict mode fails,
-# a fallback to normal 'pip install -r requirements.txt' is attempted automatically.
-# Use --no-strict to skip strict mode and install normally from requirements.txt.
+# Default: STRICT mode is ON (uses --no-deps and installs explicit package list).
+# If STRICT mode fails, we fall back to a two-step install that AVOIDS 'av':
+#   1) pip install -r requirements-nonav.txt
+#   2) pip install --no-deps faster-whisper==0.10.1
+#
+# This prevents 'pip' from trying to pull 'av==10.*' from faster-whisper metadata.
 
 FRESH=0
 PY_REQ=""
@@ -78,7 +81,7 @@ echo ">>> Activating venv ..."
 # shellcheck disable=SC1091
 source .venv/bin/activate || { echo "[!] Could not activate venv. Is python3-venv installed?"; exit 1; }
 
-# Ensure pip exists in the venv (Debian sometimes omits it if venv was created without python3-venv earlier)
+# Ensure pip exists in the venv
 python -m ensurepip --upgrade || true
 
 echo ">>> Upgrading pip/setuptools/wheel ..."
@@ -92,29 +95,30 @@ pip uninstall -y av || true
 if [[ "$STRICT" == "1" ]]; then
   echo ">>> STRICT mode: installing explicit packages with --no-deps ..."
   set +e
-  # Explicit list incl. runtime deps often pulled transitively:
-  # - tokenizers (required by faster-whisper), cffi+pycparser (for sounddevice on some platforms)
+  # Quote '<1' so the shell doesn't interpret '<' as redirection.
   pip install --no-cache-dir --no-deps \
-    numpy==1.* \
-    paho-mqtt==2.* \
-    PyYAML==6.* \
-    pvporcupine==3.* \
-    webrtcvad==2.* \
-    ctranslate2==4.* \
-    faster-whisper==0.10.* \
-    tokenizers>=0.13,<1 \
-    sounddevice==0.4.* \
-    cffi>=1.15,<2 \
-    pycparser>=2.21,<3
+    "numpy==1.*" \
+    "paho-mqtt==2.*" \
+    "PyYAML==6.*" \
+    "pvporcupine==3.*" \
+    "webrtcvad==2.*" \
+    "ctranslate2==4.*" \
+    "faster-whisper==0.10.1" \
+    "tokenizers>=0.13,<1" \
+    "sounddevice==0.4.*" \
+    "cffi>=1.15,<2" \
+    "pycparser>=2.21,<3"
   STRICT_RC=$?
   set -e
   if [[ $STRICT_RC -ne 0 ]]; then
-    echo "[!] STRICT install failed (likely due to missing wheels on this Python/arch). Falling back to normal install ..."
-    pip install --no-cache-dir -r requirements.txt
+    echo "[!] STRICT install failed. Falling back to av-safe two-step install ..."
+    pip install --no-cache-dir -r requirements-nonav.txt
+    pip install --no-cache-dir --no-deps "faster-whisper==0.10.1"
   fi
 else
-  echo ">>> Non-strict mode: installing from requirements.txt (normal dependency resolution) ..."
-  pip install --no-cache-dir -r requirements.txt
+  echo ">>> Non-strict mode: installing from requirements-nonav.txt then faster-whisper --no-deps ..."
+  pip install --no-cache-dir -r requirements-nonav.txt
+  pip install --no-cache-dir --no-deps "faster-whisper==0.10.1"
 fi
 
 if [[ ! -f config.yaml ]]; then
@@ -125,18 +129,17 @@ fi
 cat << 'EOM'
 
 ============================================================
- Genio AI v5: setup complete ✅
+ Genio AI v7: setup complete ✅
 
-If you ever see: "-bash: .../.venv/bin/pip: No such file or directory"
-  1) Ensure venv exists and is activated:   source .venv/bin/activate
-  2) Bootstrap pip inside venv:             python -m ensurepip --upgrade
-  3) Rebuild venv cleanly:                  ./setup.sh --fresh
-  4) Clear shell path cache:                hash -r
+Why did 'av' appear earlier?
+  - Recent faster-whisper metadata can pull 'av==10.*' on Python 3.13.
+  - This installer prevents that by installing faster-whisper with --no-deps
+    and feeding raw audio arrays to avoid any runtime need for PyAV.
 
 Model download helpers (no pip needed):
   - Porcupine (sv .pv):    ./scripts/download_porcupine_sv.sh
-  - Whisper (CT2 via LFS): ./scripts/download_whisper_git.sh small   # tiny|base|small|medium|large-v3
-  - Piper (sv röst):        ./scripts/download_piper_sv.sh sv_SE-lisa-medium
+  - Whisper (CT2 via LFS): ./scripts/download_whisper_git.sh small
+  - Piper (sv röst):       ./scripts/download_piper_sv.sh sv_SE-lisa-medium
 
 Diagnose if something tries to install 'av':
   ./scripts/diagnose_av.sh
