@@ -133,20 +133,20 @@ class MqttClient:
         except Exception as e:
             logging.warning(f"Fel vid stängning av MQTT: {e}")
 
-    def _on_connect(self, client, userdata, flags, rc, properties=None):
-        if rc == 0:
+    def _on_connect(self, client, userdata, flags, reason_code, properties):
+        if reason_code == 0:
             logging.info("MQTT ansluten.")
             self._connected_evt.set()
             self._connection_attempts = 0
         else:
-            logging.error(f"MQTT anslutningsfel: rc={rc}")
+            logging.error(f"MQTT anslutningsfel: reason_code={reason_code}")
 
-    def _on_disconnect(self, client, userdata, rc, properties=None):
-        logging.warning(f"MQTT frånkopplad: rc={rc}")
+    def _on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties):
+        logging.warning(f"MQTT frånkopplad: reason_code={reason_code}")
         self._connected_evt.clear()
         
         # Automatic reconnection for unexpected disconnects
-        if rc != 0:
+        if reason_code != 0:
             with self._reconnect_lock:
                 self._connection_attempts += 1
                 if self._connection_attempts <= self._max_reconnect_attempts:
@@ -155,9 +155,9 @@ class MqttClient:
                 else:
                     logging.error("Max antal återanslutningsförsök nått. Ger upp.")
 
-    def _on_message(self, client, userdata, msg, properties=None):
+    def _on_message(self, client, userdata, message):
         try:
-            payload = msg.payload.decode("utf-8", errors="ignore")
+            payload = message.payload.decode("utf-8", errors="ignore")
             data = json.loads(payload)
         except json.JSONDecodeError as e:
             logging.error(f"Kunde inte avkoda JSON från MQTT-meddelande: {e}")
