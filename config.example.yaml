@@ -8,7 +8,7 @@ audio:
 wakeword:
   access_key_env: "PORCUPINE_ACCESS_KEY"
   keyword_path: "resources/porcupine/wakeword.ppn"
-  model_path:   "resources/porcupine/porcupine_params_sv.pv"  # svensk språkmodell (.pv)
+  model_path:   "resources/porcupine/porcupine_params_sv.pv"  # VALFRITT: svensk språkmodell (.pv). Om filen saknas används inbyggd standardmodell.
   sensitivity: 0.55          # 0.0 - 1.0
 
 stt:
