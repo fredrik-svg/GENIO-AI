@@ -559,17 +559,43 @@ def main():
         ]
         
         missing_vars = []
+        empty_vars = []
         for env_var_name in required_env_vars:
-            if not os.environ.get(env_var_name):
+            value = os.environ.get(env_var_name)
+            if value is None:
                 missing_vars.append(env_var_name)
+            elif not value.strip():
+                empty_vars.append(env_var_name)
         
-        if missing_vars:
+        if missing_vars or empty_vars:
+            all_invalid = missing_vars + empty_vars
             # Safe: Log only variable names, not values
-            logging.error(f"Saknade miljövariabler: {', '.join(missing_vars)}")
-            print(f"Följande miljövariabler måste sättas:", file=sys.stderr)
-            for env_var_name in missing_vars:
+            logging.error(f"Saknade eller tomma miljövariabler: {', '.join(all_invalid)}")
+            print(f"\n❌ Följande miljövariabler måste sättas korrekt:", file=sys.stderr)
+            for env_var_name in all_invalid:
                 # Safe: Only printing variable name, no sensitive data
+                if env_var_name in missing_vars:
+                    print(f"  - {env_var_name} (inte satt i miljön)", file=sys.stderr)
+                else:
+                    print(f"  - {env_var_name} (tom eller endast whitespace)", file=sys.stderr)
+            
+            print(f"\n💡 Felsökning:", file=sys.stderr)
+            print(f"  1. Kontrollera att du stavat variabelnamnen rätt", file=sys.stderr)
+            # Safe: At least one list is non-empty due to condition on line 570
+            first_var = missing_vars[0] if missing_vars else empty_vars[0]
+            print(f"  2. Kör 'echo ${first_var}' för att verifiera värdet", file=sys.stderr)
+            print(f"  3. Exportera variabler i SAMMA terminal där du kör scriptet", file=sys.stderr)
+            
+            print(f"\n📝 Exempel på korrekt användning:", file=sys.stderr)
+            print(f"  export PORCUPINE_ACCESS_KEY=\"your_key_here\"", file=sys.stderr)
+            print(f"  export MQTT_USERNAME=\"your_username\"", file=sys.stderr)
+            print(f"  export MQTT_PASSWORD=\"your_password\"", file=sys.stderr)
+            print(f"  python3 genio_ai.py", file=sys.stderr)
+            
+            print(f"\n⚙️  Din konfigurationsfil ({cfg_path}) förväntar sig:", file=sys.stderr)
+            for env_var_name in required_env_vars:
                 print(f"  - {env_var_name}", file=sys.stderr)
+            
             sys.exit(1)
         
         app = GenioAIApp(cfg)
