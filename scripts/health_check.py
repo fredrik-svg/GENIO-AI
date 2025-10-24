@@ -7,6 +7,7 @@ import os
 import sys
 from pathlib import Path
 import yaml
+import importlib
 
 def check_file(path: str, description: str) -> bool:
     """Check if a file exists."""
@@ -23,6 +24,29 @@ def check_env_var(var_name: str, required: bool = True) -> bool:
     Note: This function only logs the environment variable NAME (e.g., "MQTT_PASSWORD"),
     never the actual value. The actual value is masked when present.
     """
+    # Validate that var_name looks like an environment variable name, not a value
+    # Environment variable names typically:
+    # - Are uppercase or mixed case with underscores
+    # - Contain underscores, letters, and numbers
+    # - Do NOT contain spaces, special characters (except _), or look like base64/passwords
+    if var_name:
+        has_lowercase = any(c.islower() for c in var_name)
+        has_uppercase = any(c.isupper() for c in var_name)
+        has_underscore = '_' in var_name
+        has_suspicious_chars = any(char in var_name for char in [' ', '=', '+', '/', '{', '}', '[', ']'])
+        
+        is_suspicious = (
+            len(var_name) > 50 or  # Suspiciously long
+            has_suspicious_chars or  # Contains base64 or other suspicious chars
+            (has_lowercase and has_uppercase and not has_underscore)  # Mixed case without underscores (like "Genio2025")
+        )
+        
+        if is_suspicious:
+            print(f"⚠️  VARNING: '{var_name[:20]}...' ser inte ut som ett miljövariabelnamn!")
+            print(f"    Miljövariabler ska vara namn som 'PORCUPINE_ACCESS_KEY', inte faktiska lösenord.")
+            print(f"    Kontrollera din config.yaml - använd miljövariabelnamn, inte värden.")
+            return False
+    
     value = os.environ.get(var_name)
     if value:
         # Only show that variable is set, never log actual value
@@ -84,7 +108,7 @@ def check_dependencies():
     all_ok = True
     for module_name in required_modules:
         try:
-            __import__(module_name.replace(".", "_") if "." in module_name else module_name)
+            importlib.import_module(module_name)
             print(f"✅ {module_name}")
         except ImportError:
             print(f"❌ {module_name} saknas")
