@@ -57,7 +57,7 @@ class MqttClient:
         self.cfg = cfg
         self.client = mqtt.Client(
             client_id=cfg["client_id"],
-            callback_api_version=mqtt.CallbackAPIVersion.VERSION1,
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
         )
         self.client.enable_logger(logging.getLogger("paho-mqtt"))
 
@@ -133,7 +133,7 @@ class MqttClient:
         except Exception as e:
             logging.warning(f"Fel vid stängning av MQTT: {e}")
 
-    def _on_connect(self, client, userdata, flags, rc):
+    def _on_connect(self, client, userdata, flags, rc, properties=None):
         if rc == 0:
             logging.info("MQTT ansluten.")
             self._connected_evt.set()
@@ -141,7 +141,7 @@ class MqttClient:
         else:
             logging.error(f"MQTT anslutningsfel: rc={rc}")
 
-    def _on_disconnect(self, client, userdata, rc):
+    def _on_disconnect(self, client, userdata, rc, properties=None):
         logging.warning(f"MQTT frånkopplad: rc={rc}")
         self._connected_evt.clear()
         
@@ -155,7 +155,7 @@ class MqttClient:
                 else:
                     logging.error("Max antal återanslutningsförsök nått. Ger upp.")
 
-    def _on_message(self, client, userdata, msg):
+    def _on_message(self, client, userdata, msg, properties=None):
         try:
             payload = msg.payload.decode("utf-8", errors="ignore")
             data = json.loads(payload)
