@@ -52,7 +52,7 @@ find_python() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo ">>> Installing system packages (audio, build tools, ffmpeg, BLAS, git-lfs, libffi-dev) ..."
+echo ">>> Installing system packages (audio, build tools, ffmpeg, BLAS, git-lfs, libffi-dev, espeak-ng) ..."
 sudo apt update
 sudo apt install -y \
   python3 python3-venv python3-dev \
@@ -60,6 +60,7 @@ sudo apt install -y \
   libffi-dev \
   portaudio19-dev libportaudio2 libportaudiocpp0 alsa-utils \
   libsndfile1-dev libopenblas-dev ffmpeg \
+  espeak-ng \
   git git-lfs
 
 git lfs install

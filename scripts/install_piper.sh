@@ -3,6 +3,10 @@ set -Eeuo pipefail
 
 # Install Piper TTS binary for Raspberry Pi / ARM64 Linux
 # Downloads the pre-built binary from the official Piper releases
+#
+# Prerequisites:
+#   - espeak-ng (install with: sudo apt install espeak-ng)
+#   - The setup.sh script installs this automatically
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -37,6 +41,20 @@ echo "    Version: ${PIPER_VERSION}"
 echo "    Platform: ${PLATFORM} (${ARCH})"
 echo "    URL: ${PIPER_URL}"
 echo ""
+
+# Check for espeak-ng dependency
+if ! command -v espeak-ng &> /dev/null; then
+    echo "⚠️  Warning: espeak-ng is not installed"
+    echo "   Piper requires espeak-ng to function properly."
+    echo "   Install it with: sudo apt install espeak-ng"
+    echo ""
+    echo -n "   Continue anyway? [y/N] "
+    read -r REPLY
+    if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+        echo "   Aborting installation."
+        exit 1
+    fi
+fi
 
 # Create temporary directory
 TMP_DIR=$(mktemp -d)
