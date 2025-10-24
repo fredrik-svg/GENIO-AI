@@ -549,7 +549,7 @@ def main():
 
         cfg = load_config(cfg_path)
         
-        # Validate environment variables
+        # Validate environment variables (only check names, never log values)
         required_env_vars = [
             cfg["wakeword"]["access_key_env"],
             cfg["mqtt"]["username_env"],
@@ -557,15 +557,16 @@ def main():
         ]
         
         missing_vars = []
-        for var in required_env_vars:
-            if not os.environ.get(var):
-                missing_vars.append(var)
+        for env_var_name in required_env_vars:
+            if not os.environ.get(env_var_name):
+                missing_vars.append(env_var_name)
         
         if missing_vars:
+            # Log only variable names, not values
             logging.error(f"Saknade miljövariabler: {', '.join(missing_vars)}")
             print(f"Följande miljövariabler måste sättas:", file=sys.stderr)
-            for var in missing_vars:
-                print(f"  - {var}", file=sys.stderr)
+            for env_var_name in missing_vars:
+                print(f"  - {env_var_name}", file=sys.stderr)
             sys.exit(1)
         
         app = GenioAIApp(cfg)

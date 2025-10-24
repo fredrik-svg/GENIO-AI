@@ -21,7 +21,9 @@ def check_env_var(var_name: str, required: bool = True) -> bool:
     """Check if an environment variable is set."""
     value = os.environ.get(var_name)
     if value:
-        print(f"✅ Miljövariabel {var_name}: {'*' * 8} (dold)")
+        # Only show that variable is set, never log actual value
+        masked_value = '*' * min(len(value), 8)
+        print(f"✅ Miljövariabel {var_name}: {masked_value}")
         return True
     else:
         if required:
