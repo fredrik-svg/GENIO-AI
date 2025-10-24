@@ -214,10 +214,13 @@ class MqttClient:
             142: "Keep-alive timeout",
             143: "Sessionen stängd",
             144: "Felaktigt filter",
-            147: "Anslutningsfrekvens överskreds",
-            148: "Maximal anslutningstid",
-            149: "Prenumerationsidentifierare tillgängliga",
+            147: "Receive maximum överskreds",
+            148: "Topic alias ogiltigt",
+            149: "Paket för stort",
+            150: "Meddelandefrekvens för hög",
             151: "Kvothöjd nådd",
+            152: "Administrativ åtgärd",
+            153: "Payload-format ogiltigt",
         }
         disconnect_msg = disconnect_messages.get(rc, f"Okänt fel (kod {rc})")
         logging.warning(f"MQTT frånkopplad: reason_code={rc} ({disconnect_msg})")
