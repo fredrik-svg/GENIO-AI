@@ -28,7 +28,7 @@ esac
 
 # Piper release information
 PIPER_VERSION="2023.11.14-2"
-PIPER_RELEASE="v${PIPER_VERSION}"
+PIPER_RELEASE="${PIPER_VERSION}"
 PIPER_ARCHIVE="piper_linux_${ARCH}.tar.gz"
 PIPER_URL="https://github.com/rhasspy/piper/releases/download/${PIPER_RELEASE}/${PIPER_ARCHIVE}"
 
@@ -56,8 +56,8 @@ fi
 echo ">>> Extracting archive..."
 tar -xzf "$PIPER_ARCHIVE"
 
-# Find the piper binary
-PIPER_BIN=$(find . -name "piper" -type f | head -1)
+# Find the piper binary (it's in a subdirectory called 'piper')
+PIPER_BIN=$(find . -name "piper" -type f -executable 2>/dev/null | head -1)
 if [[ -z "$PIPER_BIN" ]]; then
     echo "❌ Could not find piper binary in archive"
     exit 1
@@ -68,9 +68,8 @@ chmod +x "$PIPER_BIN"
 
 # Test that it works
 echo ">>> Testing Piper binary..."
-if ! "$PIPER_BIN" --version 2>/dev/null | grep -q "piper"; then
-    echo "⚠️  Warning: Could not verify Piper version, but continuing..."
-fi
+PIPER_VERSION_OUTPUT=$("$PIPER_BIN" --version 2>&1 || echo "unknown")
+echo "    Version: $PIPER_VERSION_OUTPUT"
 
 # Install to /usr/local/bin (requires sudo)
 echo ">>> Installing to /usr/local/bin/piper (requires sudo)..."
