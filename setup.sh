@@ -139,6 +139,7 @@ Why did 'av' appear earlier?
 Model download helpers (no pip needed):
   - Porcupine (sv .pv):    ./scripts/download_porcupine_sv.sh
   - Whisper (CT2 via LFS): ./scripts/download_whisper_git.sh small
+  - Piper binary:          ./scripts/install_piper.sh
   - Piper (sv röst):       ./scripts/download_piper_sv.sh sv_SE-lisa-medium
 
 Diagnose if something tries to install 'av':

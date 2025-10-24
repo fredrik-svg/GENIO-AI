@@ -16,7 +16,8 @@
   och kör `scripts/download_with_hf.py Systran/faster-whisper-small resources/whisper/whisper-small-ct2`.
 
 ## Piper (svenska röster)
-- `scripts/download_piper_sv.sh sv_SE-lisa-medium` laddar ner röst + json till `resources/piper/`.
+- **Piper-binär**: `scripts/install_piper.sh` installerar Piper TTS-binären till `/usr/local/bin/piper`.
+- **Röstmodeller**: `scripts/download_piper_sv.sh sv_SE-lisa-medium` laddar ner röst + json till `resources/piper/`.
 - Ange sökvägen i `tts.model_path` i `config.yaml`.
 
 ## Kataloglayout

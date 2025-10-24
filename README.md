@@ -28,6 +28,16 @@ Se [setup.sh](setup.sh) för automatisk installation på Raspberry Pi 5.
 ./setup.sh
 ```
 
+### Installera Piper TTS-binär
+
+Efter att du kört setup.sh, installera Piper TTS-binären:
+
+```bash
+./scripts/install_piper.sh
+```
+
+Detta laddar ner och installerar Piper till `/usr/local/bin/piper`.
+
 ## Konfiguration
 
 1. Kopiera `config.example.yaml` till `config.yaml`
